@@ -3,3 +3,4 @@
 *.hdf5
 *.fits
 *.txt
+__pycache__/
