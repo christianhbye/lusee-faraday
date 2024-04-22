@@ -75,7 +75,10 @@ class Sky:
 
     @property
     def sky_angle(self):
-        return hp.pix2ang(self.nside, np.arange(self.npix))
+        """
+        Returning the longitude and latitude of the sky pixels.
+        """
+        return hp.pix2ang(self.nside, np.arange(self.npix), lonlat=True)
 
     @classmethod
     def zeros(cls, nside, freq=None):
@@ -83,8 +86,9 @@ class Sky:
         if freq is None:
             nfreq = 1
         else:
-            nfreq = len(freq)
-        return cls(stokes=np.zeros((nfreq, 3, npix)), frequency=freq)
+            freq = np.atleast_1d(freq)
+            nfreq = freq.size
+        return cls(stokes=np.zeros((nfreq, 3, npix)), freq=freq)
 
     def add_point_source(self, alt=90, az=0, extent=5):
         """
@@ -105,10 +109,11 @@ class Sky:
                 "Sky must be initialized before adding point sources"
             )
 
-        theta, phi = self.sky_angle[1]
+        lon, lat = self.sky_angle
+        phi = np.deg2rad(lon)
         # currently only doing source at zenith
         assert alt == 90
-        mask = np.abs(np.degrees(theta) - alt) < extent
+        mask = np.abs(lat - alt) < extent
         self.stokes[:, 0, mask] += 1  # stokes I
         # add None to phi for frequency broadcasting
         self.stokes[:, 1, mask] += -np.cos(2 * phi[None, mask])  # stokes Q
@@ -124,6 +129,17 @@ class Sky:
 
         # self.stokes[0, mask] = 1
         # self.stokes[1, mask] = 1
+
+    def del_zeros(self):
+        """
+        Remove pixels with zero intensity. A lot of sky maps will be mostly
+        zeros (e.g. if there's only one point source in the sky). This method
+        removes those pixels to speed up the computation and reduce memory
+        usage.
+        """
+        s = self.stokes.shape[-1]
+        self.stokes = self.stokes[:, :, self.stokes[0] != 0]
+        print(f"Reduced number of pixels from {s} to {self.stokes.shape[-1]}")
 
     def power_law(self, freqs, beta):
         """
@@ -144,7 +160,7 @@ class Sky:
             raise ValueError(
                 "Sky must have a referency frequency before scaling"
             )
-        self.stokes = self.stokes * (freqs / self.freq) ** beta
+        self.stokes = self.stokes * (freqs[:, None, None] / self.freq) ** beta
         self.freq = freqs
 
     def apply_faraday(self, rm):
@@ -160,7 +176,7 @@ class Sky:
         u = self.stokes[:, 2]
         p = q + 1j * u
         chi = pol_angle(self.freq, rm, 23e3)  # XXX
-        p_rot = p * np.exp(2j * chi)
+        p_rot = p * np.exp(2j * chi[:, None])
         self.stokes_rot = self.stokes.copy()
         self.stokes_rot[:, 1] = np.real(p_rot)
         self.stokes_rot[:, 2] = np.imag(p_rot)
