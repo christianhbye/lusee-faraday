@@ -37,12 +37,13 @@ class ShortDipole(Beam):
         theta, phi = hp.pix2ang(
             nside, np.arange(hp.nside2npix(nside)), nest=False, lonlat=False
         )
+        horizon = np.where(theta < np.pi / 2, 1, 0)[None]
         # X beam
         E_theta = -np.cos(theta) * np.cos(phi)
         E_phi = np.sin(phi)
-        beam_X = np.array([E_theta, E_phi])
+        beam_X = np.array([E_theta, E_phi]) * horizon
         # Y beam
         E_theta = -np.cos(theta) * np.sin(phi)
         E_phi = -np.cos(phi)
-        beam_Y = np.array([E_theta, E_phi])
+        beam_Y = np.array([E_theta, E_phi]) * horizon
         super().__init__(beam_X=beam_X, beam_Y=beam_Y, frequency=frequency)
