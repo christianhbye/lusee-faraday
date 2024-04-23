@@ -80,6 +80,22 @@ class Sky:
         """
         return hp.pix2ang(self.nside, np.arange(self.npix), lonlat=True)
 
+    @property
+    def bright_pixels(self):
+        """
+        Return the pixels that have some intensity at at least one frequency.
+        """
+        return np.any(self.stokes[:, 0] != 0, axis=0)
+
+    def del_dark_pixels(self):
+        """
+        Delete the pixels that have no intensity at any frequency. Return the
+        pixels that were kept.
+        """
+        pixels = self.bright_pixels
+        self.stokes = self.stokes[:, :, pixels]
+        return pixels
+
     @classmethod
     def zeros(cls, nside, freq=None):
         npix = hp.nside2npix(nside)
@@ -130,20 +146,9 @@ class Sky:
         # self.stokes[0, mask] = 1
         # self.stokes[1, mask] = 1
 
-    def del_zeros(self):
-        """
-        Remove pixels with zero intensity. A lot of sky maps will be mostly
-        zeros (e.g. if there's only one point source in the sky). This method
-        removes those pixels to speed up the computation and reduce memory
-        usage.
-        """
-        s = self.stokes.shape[-1]
-        self.stokes = self.stokes[:, :, self.stokes[0] != 0]
-        print(f"Reduced number of pixels from {s} to {self.stokes.shape[-1]}")
-
     def power_law(self, freqs, beta):
         """
-        Scale the sky by a power law.
+        Scale the nonzero (bright pixels) sky by a power law.
 
         Parameters
         ----------
@@ -161,7 +166,6 @@ class Sky:
                 "Sky must have a referency frequency before scaling"
             )
         self.stokes = self.stokes * (freqs[:, None, None] / self.freq) ** beta
-        self.freq = freqs
 
     def apply_faraday(self, rm):
         """

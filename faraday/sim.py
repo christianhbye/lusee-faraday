@@ -79,7 +79,7 @@ class Simulator:
         self.beam = beam
         self.sky = sky
 
-    def vis(self, faraday=True):
+    def compute_vis(self, faraday=True):
         """
         Compute visibilities.
         """
@@ -96,3 +96,12 @@ class Simulator:
         V22 = np.einsum(ein, bY, bY.conj(), T)
         V12 = np.einsum(ein, bX, bY.conj(), T)
         return np.real([V11, V12.real, V12.imag, V22]) * norm
+
+    def channelize(self, freqs, vis_arr):
+        raise NotImplementedError
+
+    def run(self):
+        self.vis = self.compute_vis(faraday=False)
+        self.vis_rot = self.compute_vis(faraday=True)
+        self.stokes = vis2stokes(self.vis)
+        self.stokes_rot = vis2stokes(self.vis_rot)

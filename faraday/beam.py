@@ -8,6 +8,15 @@ class Beam:
         self.beam_Y = beam_Y
         self.frequency = frequency
 
+    def del_pix(self, pix):
+        """
+        Delete pixels from the beam by specifying the pixel indices TO KEEP.
+        """
+        if self.beam_X is not None:
+            self.beam_X = self.beam_X[:, pix]
+        if self.beam_Y is not None:
+            self.beam_Y = self.beam_Y[:, pix]
+
     def rotate_X2Y(self, phi_axis=-1):
         """
         Rotate the X polarization to the Y polarization.
