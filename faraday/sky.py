@@ -166,6 +166,7 @@ class Sky:
                 "Sky must have a referency frequency before scaling"
             )
         self.stokes = self.stokes * (freqs[:, None, None] / self.freq) ** beta
+        self.freq = freqs
 
     def apply_faraday(self, rm):
         """
