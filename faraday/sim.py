@@ -79,6 +79,12 @@ class Simulator:
         self.beam = beam
         self.sky = sky
 
+        path = "/home/christian/Documents/research/lusee/faraday/data/zoom_response_4tap.txt"
+        spec = np.loadtxt(path)
+        self.offset = spec[:, 0] / 1e3  # spacing in MHz
+        self.spec = spec[:, 1:] / spec[:, 1:].sum(axis=0, keepdims=True)
+
+
     def compute_vis(self, faraday=True):
         """
         Compute visibilities.
