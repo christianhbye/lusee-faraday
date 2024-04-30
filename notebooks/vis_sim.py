@@ -76,9 +76,9 @@ def plot_vis(freqs, vis_arr, vis_arr_rot):
         nrows=2, ncols=2, sharex=True, sharey="row", constrained_layout=True
     )
     axs[0, 0].plot(freqs, vis_arr[0], c="C0", label="V11")
-    axs[0, 0].plot(freqs, vis_arr[3], ls="--", c="C1", label="V22")
+    axs[0, 0].plot(freqs, vis_arr[3], c="C1", label="V22")
     axs[0, 1].plot(freqs, vis_arr_rot[0], c="C0")
-    axs[0, 1].plot(freqs, vis_arr_rot[3], c="C1", ls="--")
+    axs[0, 1].plot(freqs, vis_arr_rot[3], c="C1")
     axs[1, 0].plot(freqs, vis_arr[1], label="V12 real")
     axs[1, 0].plot(freqs, vis_arr[2], label="V12 imag")
     axs[1, 1].plot(freqs, vis_arr_rot[1])
