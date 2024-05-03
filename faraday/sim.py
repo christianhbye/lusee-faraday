@@ -82,7 +82,9 @@ class Simulator:
         path = "/home/christian/Documents/research/lusee/faraday/data/zoom_response_4tap.txt"
         spec = np.loadtxt(path)
         self.offset = spec[:, 0] / 1e3  # spacing in MHz
-        self.spec = spec[:, 1:] / spec[:, 1:].sum(axis=0, keepdims=True)
+        spec = spec[:, 1:] / spec[:, 1:].sum(axis=0, keepdims=True)
+        self.wide_bin = spec[:, 0]
+        self.spec = spec[:, 1:]
 
 
     def compute_vis(self, faraday=True):
@@ -103,11 +105,27 @@ class Simulator:
         V12 = np.einsum(ein, bX, bY.conj(), T)
         return np.real([V11, V12.real, V12.imag, V22]) * norm
 
-    def channelize(self, freqs, vis_arr):
+    def channelize(self, vis_arr):
+        """
+        Channelize using narrow frequency bins.
+
+        Parameters
+        ----------
+        vis_arr : np.ndarray
+            Visibilities in the order V11, V12_real, V12_imag, V22.
+            Shape (4, nfreqs).
+        """
+        return vis_arr @ self.spec
+
+    def channelize_wide(self, freqs, vis_arr):
         raise NotImplementedError
 
-    def run(self):
+    def run(self, channelize=True):
         self.vis = self.compute_vis(faraday=False)
         self.vis_rot = self.compute_vis(faraday=True)
+        if channelize:
+            self.freq = self.offset[self.spec.argmax(axis=0)]
+            self.vis = self.channelize(self.vis)
+            self.vis_rot = self.channelize(self.vis_rot)
         self.stokes = vis2stokes(self.vis)
         self.stokes_rot = vis2stokes(self.vis_rot)
