@@ -59,13 +59,26 @@ class ShortDipole(Beam):
 
 
 class LuseeBeam(Beam):
-    def __init__(self, path, frequency, nside=128):
+    def __init__(self, path, frequency=30, nside=128):
+        """
+        Load the LUSEE beam from a FITS file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the LUSEE beam.
+        frequency : float
+            Frequency at which to extract the beam in MHz.
+        nside : int
+            Healpix nside at which to interpolate the beam.
+
+        """
         with fits.open(path) as hdul:
             E_theta = hdul["Etheta_real"].data + 1j * hdul["Etheta_imag"].data
             E_phi = hdul["Ephi_real"].data + 1j * hdul["Ephi_imag"].data
             ix = np.argwhere(hdul["freq"].data == frequency)[0, 0]
-            E_theta = E_theta[ix]
-            E_phi = E_phi[ix]
+            E_theta = E_theta[ix, :, :-1]
+            E_phi = E_phi[ix, :, :-1]
         lusee_Y = np.array(
             [E_theta.real, E_theta.imag, E_phi.real, E_phi.imag]
         )
