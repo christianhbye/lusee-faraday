@@ -43,6 +43,62 @@ def pol_angle(freq, rm, ref_freq):
     dlambda_sq = c**2 * (1 / f_Hz**2 - 1 / f0_Hz**2)
     return rm * dlambda_sq
 
+def cap_area_ext(extent=5):
+    """
+    Compute the area of a spherical cap in steradians.
+
+    Parameters
+    ----------
+    extent : float
+        Extent of the cap in degrees.
+
+    """
+    return 2 * np.pi * (1 - np.cos(np.radians(extent)))
+
+def cap_area_bounds(theta0, dtheta, dphi):
+    """
+    Compute the area of a spherical cap in steradians given the bounds of the
+    cap and the center colaatitude. That is, the cap spans the region
+    theta0 - dtheta to theta0 + dtheta in the colatitude direction and
+    phi0 - dphi to phi0 + dphi in the longitude direction.
+
+    Parameters
+    ----------
+    theta0 : float
+        Colatitude of the center of the cap in radians.
+    dtheta : float
+        Half extent of the cap in radians in the colatitude direction.
+    dphi : float
+        Half extent of the cap in radians in the longitude direction.
+
+    Returns
+    -------
+    area : float
+        Area of the cap in steradians.
+
+    """
+    return 4 * np.sin(theta0) * dphi * np.sin(dtheta)  #XXX
+
+def cap_pixels(lat, lon, nside=128, extent=5):
+    """
+    Compute the pixels in a spherical cap given a center and extent.
+
+    Parameters
+    ----------
+    lat : float
+        Latitude of the center of the cap in degrees.
+    lon : float
+        Longitude of the center of the cap in degrees.
+    nside : int
+        Healpix nside parameter.
+    extent : float
+        Extent of the cap in degrees.
+
+    """
+    area = cap_area(extent)
+    npix = hp.nside2npix(nside) * area / (4 * np.pi)
+
+
 
 class Sky:
     def __init__(self, stokes=None, freq=None):
@@ -97,7 +153,7 @@ class Sky:
         return pixels
 
     @classmethod
-    def zeros(cls, nside, freq=None):
+    def zeros(cls, nside=128, freq=30):
         npix = hp.nside2npix(nside)
         if freq is None:
             nfreq = 1
@@ -168,7 +224,7 @@ class Sky:
         self.stokes = self.stokes * (freqs[:, None, None] / self.freq) ** beta
         self.freq = freqs
 
-    def apply_faraday(self, rm):
+    def apply_faraday(self, rm=100):
         """
         Apply Faraday rotation to the sky.
 
@@ -176,6 +232,7 @@ class Sky:
         ----------
         rm : float
             Rotation measure in rad/m^2.
+
         """
         q = self.stokes[:, 1]
         u = self.stokes[:, 2]
