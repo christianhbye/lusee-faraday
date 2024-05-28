@@ -39,6 +39,41 @@ class Beam:
         if self.beam_Y is not None:
             self.beam_Y = self.beam_Y[:, pix]
 
+    def rotate(self, rot):
+        """
+        Rotate the beam.
+
+        Parameters
+        ----------
+        rot : hp.Rotator
+            Healpy Rotator object.
+        """
+        if self.beam_X is not None:
+            theta_re = np.real(self.beam_X[0])
+            theta_im = np.imag(self.beam_X[0])
+            phi_re = np.real(self.beam_X[1])
+            phi_im = np.imag(self.beam_X[1])
+            rot_theta = rot.rotate_map_alms(
+                theta_re
+            ) + 1j * rot.rotate_map_alms(theta_im)
+            rot_phi = rot.rotate_map_alms(phi_re) + 1j * rot.rotate_map_alms(
+                phi_im
+            )
+            self.beam_X = np.array([rot_theta, rot_phi])
+
+        if self.beam_Y is not None:
+            theta_re = np.real(self.beam_Y[0])
+            theta_im = np.imag(self.beam_Y[0])
+            phi_re = np.real(self.beam_Y[1])
+            phi_im = np.imag(self.beam_Y[1])
+            rot_theta = rot.rotate_map_alms(
+                theta_re
+            ) + 1j * rot.rotate_map_alms(theta_im)
+            rot_phi = rot.rotate_map_alms(phi_re) + 1j * rot.rotate_map_alms(
+                phi_im
+            )
+            self.beam_Y = np.array([rot_theta, rot_phi])
+
 
 class ShortDipole(Beam):
     def __init__(self, nside, frequency=None):
