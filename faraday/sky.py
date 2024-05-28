@@ -43,62 +43,6 @@ def pol_angle(freq, rm, ref_freq):
     dlambda_sq = c**2 * (1 / f_Hz**2 - 1 / f0_Hz**2)
     return rm * dlambda_sq
 
-def cap_area_ext(extent=5):
-    """
-    Compute the area of a spherical cap in steradians.
-
-    Parameters
-    ----------
-    extent : float
-        Extent of the cap in degrees.
-
-    """
-    return 2 * np.pi * (1 - np.cos(np.radians(extent)))
-
-def cap_area_bounds(theta0, dtheta, dphi):
-    """
-    Compute the area of a spherical cap in steradians given the bounds of the
-    cap and the center colaatitude. That is, the cap spans the region
-    theta0 - dtheta to theta0 + dtheta in the colatitude direction and
-    phi0 - dphi to phi0 + dphi in the longitude direction.
-
-    Parameters
-    ----------
-    theta0 : float
-        Colatitude of the center of the cap in radians.
-    dtheta : float
-        Half extent of the cap in radians in the colatitude direction.
-    dphi : float
-        Half extent of the cap in radians in the longitude direction.
-
-    Returns
-    -------
-    area : float
-        Area of the cap in steradians.
-
-    """
-    return 4 * np.sin(theta0) * dphi * np.sin(dtheta)  #XXX
-
-def cap_pixels(lat, lon, nside=128, extent=5):
-    """
-    Compute the pixels in a spherical cap given a center and extent.
-
-    Parameters
-    ----------
-    lat : float
-        Latitude of the center of the cap in degrees.
-    lon : float
-        Longitude of the center of the cap in degrees.
-    nside : int
-        Healpix nside parameter.
-    extent : float
-        Extent of the cap in degrees.
-
-    """
-    area = cap_area(extent)
-    npix = hp.nside2npix(nside) * area / (4 * np.pi)
-
-
 
 class Sky:
     def __init__(self, stokes=None, freq=None):
@@ -162,16 +106,12 @@ class Sky:
             nfreq = freq.size
         return cls(stokes=np.zeros((nfreq, 3, npix)), freq=freq)
 
-    def add_point_source(self, alt=90, az=0, extent=5):
+    def add_point_source(self, extent=5):
         """
-        Add a linearly polarized point source to the sky.
+        Add a linearly polarized point source to the sky at zenith.
 
         Parameters
         ----------
-        alt : float
-            Altitude of the source in degrees.
-        az : float
-            Azimuth of the source in degrees.
         extent : float
             Extent of the source in degrees.
 
@@ -184,23 +124,11 @@ class Sky:
         lon, lat = self.sky_angle
         phi = np.deg2rad(lon)
         # currently only doing source at zenith
-        assert alt == 90
-        mask = np.abs(lat - alt) < extent
+        mask = lat > 90 - extent
         self.stokes[:, 0, mask] += 1  # stokes I
         # add None to phi for frequency broadcasting
         self.stokes[:, 1, mask] += -np.cos(2 * phi[None, mask])  # stokes Q
         self.stokes[:, 2, mask] += np.sin(2 * phi[None, mask])  # stokes U
-
-        # alt = np.radians(alt)
-        # az = np.radians(az)
-        # extent = np.radians(extent)
-
-        # delta = np.arccos(np.sin(alt) * np.sin(theta) + np.cos(alt) *
-        # np.cos(theta) * np.cos(az - phi))
-        # mask = delta < extent
-
-        # self.stokes[0, mask] = 1
-        # self.stokes[1, mask] = 1
 
     def power_law(self, freqs, beta):
         """
