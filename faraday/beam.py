@@ -96,11 +96,15 @@ class Beam:
 
         """
         powers = {"XX": {}, "XY": {}, "YY": {}}
+        row_X = self.beam_X.T[:, None, :]  # (npix, 1, 2)
+        row_Y = self.beam_Y.T[:, None, :]  # (npix, 1, 2)
+        col_X = self.beam_X.T[:, :, None]  # (npix, 2, 1)
+        col_Y = self.beam_Y.T[:, :, None]  # (npix, 2, 1)
         for stokes in ["I", "Q", "U"]:
             mat = PAULI_MATRICES[stokes]
-            powers["XX"][stokes] = self.beam_X @ mat @ self.beam_X.conj().T
-            powers["XY"][stokes] = self.beam_X @ mat @ self.beam_Y.conj().T
-            powers["YY"][stokes] = self.beam_Y @ mat @ self.beam_Y.conj().T
+            powers["XX"][stokes] = row_X @ mat @ col_X.conj()
+            powers["XY"][stokes] = row_X @ mat @ col_Y.conj()
+            powers["YY"][stokes] = row_Y @ mat @ col_Y.conj()
         return powers
 
 

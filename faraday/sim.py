@@ -155,7 +155,7 @@ class Simulator:
         # first do computation at a reference frequency
         # where the polarization angle is zero (23 GHz XXX)
         self.compute_vis()
-        vis_arr = np.zeros(3)
+        vis_arr = np.zeros(3, dtype=complex)
         for i, pair in enumerate(["XX", "XY", "YY"]):
             for stokes in ["I", "Q", "U"]:
                 vis_arr[i] += self._vis_components[pair][stokes]
@@ -178,7 +178,7 @@ class Simulator:
 
         # for faraday rotation, we get UQ and QU terms
         chi = pol_angle(sim_freq, 100, ref_freq=self.ref_freq)
-        vis_arr_rot = np.zeros((sim_freq.size, 3))
+        vis_arr_rot = np.zeros((3, sim_freq.size), dtype=complex)
         for i, pair in enumerate(["XX", "XY", "YY"]):
             vis_arr_rot[i] += self._vis_components[pair]["I"]
             vis_arr_rot[i] += (
