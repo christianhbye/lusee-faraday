@@ -2,27 +2,7 @@ import numpy as np
 import healpy as hp
 
 
-def coherency(stokes):
-    """
-    Coherecy matrix of the sky assuming no V.
-
-    Parameters
-    ----------
-    stokes : np.ndarray
-        Stokes parameters of the sky. Shape (nfreq, 3, npix).
-
-    Returns
-    -------
-    T : np.ndarray
-        Coherency matrix of the sky. Shape (nfreq, 2, 2, npix).
-    """
-    i = stokes[:, 0]
-    q = stokes[:, 1]
-    u = stokes[:, 2]
-    return 1 / 2 * np.array([[i + q, u], [u, i - q]])
-
-
-def pol_angle(freq, rm, ref_freq):
+def pol_angle(freq, rm, ref_freq=23e3):
     """
     Compute polarization angle as a function of frequency.
 
@@ -50,20 +30,12 @@ class Sky:
         Parameters
         ----------
         stokes : np.ndarray
-           Stokes parameters of the sky. Shape (nfreq, 3, npix).
+           Stokes parameters of the sky. Shape (3, npix).
         freq : np.ndarray
-           List of frequencies in MHz.
+           Frequency in MHz.
         """
         self.stokes = stokes
         self.freq = freq
-
-    @property
-    def coherency(self):
-        return coherency(self.stokes)
-
-    @property
-    def coherency_rot(self):
-        return coherency(self.stokes_rot)
 
     @property
     def npix(self):
@@ -83,9 +55,9 @@ class Sky:
     @property
     def bright_pixels(self):
         """
-        Return the pixels that have some intensity at at least one frequency.
+        Return the pixels that have non-zero Stokes I.
         """
-        return np.any(self.stokes[:, 0] != 0, axis=0)
+        return self.stokes[0] != 0
 
     def del_dark_pixels(self):
         """
@@ -93,18 +65,13 @@ class Sky:
         pixels that were kept.
         """
         pixels = self.bright_pixels
-        self.stokes = self.stokes[:, :, pixels]
+        self.stokes = self.stokes[:, pixels]
         return pixels
 
     @classmethod
     def zeros(cls, nside=128, freq=30):
         npix = hp.nside2npix(nside)
-        if freq is None:
-            nfreq = 1
-        else:
-            freq = np.atleast_1d(freq)
-            nfreq = freq.size
-        return cls(stokes=np.zeros((nfreq, 3, npix)), freq=freq)
+        return cls(stokes=np.zeros((3, npix)), freq=freq)
 
     def add_point_source(self, extent=5):
         """
@@ -123,50 +90,7 @@ class Sky:
 
         lon, lat = self.sky_angle
         phi = np.deg2rad(lon)
-        # currently only doing source at zenith
         mask = lat > 90 - extent
-        self.stokes[:, 0, mask] += 1  # stokes I
-        # add None to phi for frequency broadcasting
-        self.stokes[:, 1, mask] += -np.cos(2 * phi[None, mask])  # stokes Q
-        self.stokes[:, 2, mask] += np.sin(2 * phi[None, mask])  # stokes U
-
-    def power_law(self, freqs, beta):
-        """
-        Scale the nonzero (bright pixels) sky by a power law.
-
-        Parameters
-        ----------
-        freqs : np.ndarray
-            Frequencies in MHz to scale the sky to.
-        beta : float
-            Power law index.
-        """
-        if self.stokes.shape[0] != 1:
-            raise ValueError(
-                "Sky can only be specified at one frequency before scaling"
-            )
-        if self.freq is None:
-            raise ValueError(
-                "Sky must have a referency frequency before scaling"
-            )
-        self.stokes = self.stokes * (freqs[:, None, None] / self.freq) ** beta
-        self.freq = freqs
-
-    def apply_faraday(self, rm=100):
-        """
-        Apply Faraday rotation to the sky.
-
-        Parameters
-        ----------
-        rm : float
-            Rotation measure in rad/m^2.
-
-        """
-        q = self.stokes[:, 1]
-        u = self.stokes[:, 2]
-        p = q + 1j * u
-        chi = pol_angle(self.freq, rm, 23e3)  # XXX
-        p_rot = p * np.exp(2j * chi[:, None])
-        self.stokes_rot = self.stokes.copy()
-        self.stokes_rot[:, 1] = np.real(p_rot)
-        self.stokes_rot[:, 2] = np.imag(p_rot)
+        self.stokes[0, mask] += 1  # stokes I
+        self.stokes[1, mask] += -np.cos(2 * phi[mask])  # stokes Q
+        self.stokes[2, mask] += np.sin(2 * phi[mask])  # stokes U

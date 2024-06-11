@@ -3,6 +3,13 @@ import healpy as hp
 from astropy.io import fits
 from croissant.healpix import grid2healpix
 
+# stokes I, Q, U polarization matrices
+PAULI_MATRICES = {
+    "I": 1 / 2 * np.eye(2),
+    "Q": 1 / 2 * np.array([[1, 0], [0, -1]]),
+    "U": 1 / 2 * np.array([[0, 1], [1, 0]]),
+}
+
 
 def rotate_X2Y(beam_X, phi_axis=-1):
     """
@@ -73,6 +80,28 @@ class Beam:
                 phi_im
             )
             self.beam_Y = np.array([rot_theta, rot_phi])
+
+    @property
+    def beam_powers(self):
+        """
+        Get the beam powers for each polarization. This is needed for the
+        visibility calculation.
+
+        Returns
+        -------
+        powers : dict
+            Nested dictionary containing the beam powers for each combination
+            of X and Y and Stokes I, Q, U. Keys are "XX", "XY", "YY" for the
+            first level and "I", "Q", "U" for the second level.
+
+        """
+        powers = {"XX": {}, "XY": {}, "YY": {}}
+        for stokes in ["I", "Q", "U"]:
+            mat = PAULI_MATRICES[stokes]
+            powers["XX"][stokes] = self.beam_X @ mat @ self.beam_X.conj().T
+            powers["XY"][stokes] = self.beam_X @ mat @ self.beam_Y.conj().T
+            powers["YY"][stokes] = self.beam_Y @ mat @ self.beam_Y.conj().T
+        return powers
 
 
 class ShortDipole(Beam):
