@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 import healpy as hp
 from astropy.io import fits
@@ -96,15 +97,14 @@ class Beam:
 
         """
         powers = {"XX": {}, "XY": {}, "YY": {}}
-        row_X = self.beam_X.T[:, None, :]  # (npix, 1, 2)
-        row_Y = self.beam_Y.T[:, None, :]  # (npix, 1, 2)
-        col_X = self.beam_X.T[:, :, None]  # (npix, 2, 1)
-        col_Y = self.beam_Y.T[:, :, None]  # (npix, 2, 1)
+        bx = self.beam_X  # (theta/phi, npix)
+        by = self.beam_Y  # (theta/phi, npix)
+        ein = partial(np.einsum, "ap, bp, ab -> p")
         for stokes in ["I", "Q", "U"]:
             mat = PAULI_MATRICES[stokes]
-            powers["XX"][stokes] = row_X @ mat @ col_X.conj()
-            powers["XY"][stokes] = row_X @ mat @ col_Y.conj()
-            powers["YY"][stokes] = row_Y @ mat @ col_Y.conj()
+            powers["XX"][stokes] = ein(bx, bx.conj(), mat)
+            powers["XY"][stokes] = ein(bx, by.conj(), mat)
+            powers["YY"][stokes] = ein(by, by.conj(), mat)
         return powers
 
 
