@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -78,25 +79,28 @@ def plot_stokes(freqs, stokes_arr, stokes_arr_rot):
 
 class Simulator:
     ref_freq = 23e3  # 23 GHz, reference frequency for pol angle = 0
-    center_freq = 30  # MHz
 
-    def __init__(self, beam, sky):
+    def __init__(self, beam, sky, center_freq=30):
         path = (
             "/home/christian/Documents/research/lusee/faraday/data/"
             "zoom_response_4tap.txt"
         )
+        self.center_freq = center_freq
         spec = np.loadtxt(path)
         self.offset = spec[:, 0] / 1e3  # spacing in MHz
         spec = spec[:, 1:] / spec[:, 1:].sum(axis=0, keepdims=True)
-        self.wide_bin = spec[:, 0]
+        self.wide_bin = spec[:, 0]  # shape (2000,)
         self.spec = spec[:, 1:]
 
+        _beam = deepcopy(beam)
+        _sky = deepcopy(sky)
+
         if sky and beam:
-            self.norm = 2 / np.sum(np.abs(beam.beam_X) ** 2)
-            pix = sky.del_dark_pixels()
-            beam.del_pix(pix)
-            self.beam = beam
-            self.sky = sky
+            self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2)
+            pix = _sky.del_dark_pixels()
+            _beam.del_pix(pix)
+            self.beam = _beam
+            self.sky = _sky
 
     def compute_vis(self):
         """
@@ -114,6 +118,7 @@ class Simulator:
             for i, stokes in enumerate(["I", "Q", "U"]):
                 b = beam_powers[pair][stokes]
                 s = self.sky.stokes[i]
+                # sum over pixels
                 vis[pair][stokes] = np.sum(b * s) * self.norm
             # Faraday rotation terms mixes Q and U
             bQ = beam_powers[pair]["Q"]
@@ -125,9 +130,9 @@ class Simulator:
 
         self._vis_components = vis
 
-    def channelize(self, vis_arr):
+    def channelize(self, vis_arr, bins="narrow"):
         """
-        Channelize using narrow frequency bins.
+        Channelize using narrow or wide frequency bins.
 
         Parameters
         ----------
@@ -135,10 +140,12 @@ class Simulator:
             Visibilities in the order V11, V12_real, V12_imag, V22.
             Shape (4, nfreqs).
         """
-        return vis_arr @ self.spec
-
-    def channelize_wide(self, freqs, vis_arr):
-        raise NotImplementedError
+        if bins == "narrow":
+            return vis_arr @ self.spec
+        else:  # wide
+            vis_arr = vis_arr.reshape(4, -1, self.wide_bin.size)
+            return np.sum(vis_arr * self.wide_bin[None, None], axis=2)
+        
 
     def run(self, channelize="narrow"):
         """
@@ -166,11 +173,13 @@ class Simulator:
             # these are the ouput channels after  convolution (64 chans)
             off_max = self.offset[self.spec.argmax(axis=0)]
             self.freq = self.center_freq + off_max
-        elif channelize == "wide":
-            raise NotImplementedError
         else:
-            sim_freq = np.linspace(0, 25 / 1e3, 64) + self.center_freq
-            self.freq = sim_freq
+            self.freq = np.linspace(0, 25 / 1e3, 64) + self.center_freq
+            if channelize == "wide":
+                 sim_freq = self.freq[:, None] + self.offset[None, :]
+                 sim_freq = sim_freq.flatten()
+            else:  # not channelizing
+                sim_freq = self.freq
 
         # the frequency dependence is just a power law if no Faraday rotation
         pl_factor = (sim_freq / self.ref_freq) ** (-2.5)
@@ -203,7 +212,7 @@ class Simulator:
             ]
         )
         if channelize:
-            self.vis = self.channelize(self.vis)
-            self.vis_rot = self.channelize(self.vis_rot)
+            self.vis = self.channelize(self.vis, bins=channelize)
+            self.vis_rot = self.channelize(self.vis_rot, bins=channelize)
         self.stokes = vis2stokes(self.vis)
         self.stokes_rot = vis2stokes(self.vis_rot)
