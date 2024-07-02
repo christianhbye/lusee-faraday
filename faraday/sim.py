@@ -29,9 +29,9 @@ def vis2stokes(vis_arr):
     return np.array([pI, pQ, pU])
 
 
-def plot_vis(freqs, vis_arr, vis_arr_rot):
+def plot_vis(freqs, vis_arr, vis_arr_rot, sharey="row", return_fig=False):
     fig, axs = plt.subplots(
-        nrows=2, ncols=2, sharex=True, sharey="row", constrained_layout=True
+        nrows=2, ncols=2, sharex=True, sharey=sharey, constrained_layout=True
     )
     axs[0, 0].plot(freqs, vis_arr[0], c="C0", label="V11")
     axs[0, 0].plot(freqs, vis_arr[3], c="C1", label="V22")
@@ -47,12 +47,16 @@ def plot_vis(freqs, vis_arr, vis_arr_rot):
     axs[0, 1].set_title("With Faraday")
     for ax in axs[1]:
         ax.set_xlabel("Frequency [MHz]")
+    if return_fig:
+        return fig, axs
     plt.show()
 
 
-def plot_stokes(freqs, stokes_arr, stokes_arr_rot):
+def plot_stokes(
+    freqs, stokes_arr, stokes_arr_rot, sharey="row", return_fig=False
+):
     fig, axs = plt.subplots(
-        nrows=2, ncols=2, sharex=True, sharey="row", constrained_layout=True
+        nrows=2, ncols=2, sharex=True, sharey=sharey, constrained_layout=True
     )
     axs[0, 0].plot(freqs, stokes_arr[1], label="Q")
     axs[0, 1].plot(freqs, stokes_arr_rot[1], label="Q")
@@ -74,6 +78,8 @@ def plot_stokes(freqs, stokes_arr, stokes_arr_rot):
     axs[0, 1].set_title("With Faraday")
     for ax in axs[1]:
         ax.set_xlabel("Frequency [MHz]")
+    if return_fig:
+        return fig, axs
     plt.show()
 
 
@@ -96,9 +102,10 @@ class Simulator:
         _sky = deepcopy(sky)
 
         if sky and beam:
-            self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2)
             pix = _sky.del_dark_pixels()
             _beam.del_pix(pix)
+            # XXX norm before or after del pix is still undecided
+            self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2)
             self.beam = _beam
             self.sky = _sky
 
@@ -145,9 +152,8 @@ class Simulator:
         else:  # wide
             vis_arr = vis_arr.reshape(4, -1, self.wide_bin.size)
             return np.sum(vis_arr * self.wide_bin[None, None], axis=2)
-        
 
-    def run(self, channelize="narrow"):
+    def run(self, channelize="narrow", RM=100):
         """
         Run the simulation.
 
@@ -157,6 +163,8 @@ class Simulator:
             If "narrow", channelize using narrow frequency bins.
             If "wide", channelize using wide frequency bins.
             If None, do not channelize.
+        RM : float
+            Rotation measure in rad/m^2.
 
         """
         # first do computation at a reference frequency
@@ -176,8 +184,8 @@ class Simulator:
         else:
             self.freq = np.linspace(0, 25 / 1e3, 64) + self.center_freq
             if channelize == "wide":
-                 sim_freq = self.freq[:, None] + self.offset[None, :]
-                 sim_freq = sim_freq.flatten()
+                sim_freq = self.freq[:, None] + self.offset[None, :]
+                sim_freq = sim_freq.flatten()
             else:  # not channelizing
                 sim_freq = self.freq
 
@@ -186,7 +194,7 @@ class Simulator:
         vis_arr = pl_factor[None, :] * vis_arr[:, None]
 
         # for faraday rotation, we get UQ and QU terms
-        chi = pol_angle(sim_freq, 100, ref_freq=self.ref_freq)
+        chi = pol_angle(sim_freq, RM, ref_freq=self.ref_freq)
         vis_arr_rot = np.zeros((3, sim_freq.size), dtype=complex)
         for i, pair in enumerate(["XX", "XY", "YY"]):
             vis_arr_rot[i] += self._vis_components[pair]["I"]
@@ -200,10 +208,11 @@ class Simulator:
             )
         vis_arr_rot = pl_factor[None, :] * vis_arr_rot
 
-        self.vis = np.array(
+        # _vis are raw visibilities, vis are channelized
+        self._vis = np.array(
             [vis_arr[0], np.real(vis_arr[1]), np.imag(vis_arr[1]), vis_arr[2]]
         )
-        self.vis_rot = np.array(
+        self._vis_rot = np.array(
             [
                 vis_arr_rot[0],
                 np.real(vis_arr_rot[1]),
@@ -212,7 +221,10 @@ class Simulator:
             ]
         )
         if channelize:
-            self.vis = self.channelize(self.vis, bins=channelize)
-            self.vis_rot = self.channelize(self.vis_rot, bins=channelize)
+            self.vis = self.channelize(self._vis, bins=channelize)
+            self.vis_rot = self.channelize(self._vis_rot, bins=channelize)
+        else:
+            self.vis = self._vis
+            self.vis_rot = self._vis_rot
         self.stokes = vis2stokes(self.vis)
         self.stokes_rot = vis2stokes(self.vis_rot)
