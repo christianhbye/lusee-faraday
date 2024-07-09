@@ -86,7 +86,30 @@ def plot_stokes(
 class Simulator:
     ref_freq = 23e3  # 23 GHz, reference frequency for pol angle = 0
 
-    def __init__(self, beam, sky, center_freq=30):
+    def __init__(self, beam, sky, center_freq=30, full_map=False):
+        """
+        Simulator class.
+
+        Parameters
+        ----------
+        beam : Beam
+            Beam object.
+        sky : Sky
+            Sky object.
+        center_freq : float
+            Center frequency in MHz.
+        full_map : bool
+            If true, using a full sky map specified at many pixels and
+            frequencies. Otherwise, using a single source scaled by a power
+            law.
+
+        Sky and beam can be provided at one frequency or at multiple
+        frequencies. If provided at multiple frequencies, the beam and sky
+        objects should have the same number of frequency channels. If at one
+        frequency, the beam is achromatic and the sky is scaled by a power law
+        from the reference frequency (23 GHz).
+
+        """
         path = (
             "/home/christian/Documents/research/lusee/faraday/data/"
             "zoom_response_4tap.txt"
@@ -101,13 +124,20 @@ class Simulator:
         _beam = deepcopy(beam)
         _sky = deepcopy(sky)
 
-        if sky and beam:
+        if not sky or not beam:
+            return
+
+        self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2, axis=(0, 2))
+        if not full_map:
+            _npix = _sky.npix
             pix = _sky.del_dark_pixels()
+            self.source_frac = _sky.npix / _npix  # fraction of pixels in src
             _beam.del_pix(pix)
-            # XXX norm before or after del pix is still undecided
-            self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2)
-            self.beam = _beam
-            self.sky = _sky
+
+        self.nfreq = sky.stokes.shape[1]
+
+        self.beam = _beam
+        self.sky = _sky
 
     def compute_vis(self):
         """
@@ -126,14 +156,14 @@ class Simulator:
                 b = beam_powers[pair][stokes]
                 s = self.sky.stokes[i]
                 # sum over pixels
-                vis[pair][stokes] = np.sum(b * s) * self.norm
+                vis[pair][stokes] = np.sum(b * s, axis=1) * self.norm
             # Faraday rotation terms mixes Q and U
             bQ = beam_powers[pair]["Q"]
             bU = beam_powers[pair]["U"]
             sQ = self.sky.stokes[1]
             sU = self.sky.stokes[2]
-            vis[pair]["QU"] = np.sum(bU * sQ) * self.norm
-            vis[pair]["UQ"] = np.sum(bQ * sU) * self.norm
+            vis[pair]["QU"] = np.sum(bU * sQ, axis=1) * self.norm
+            vis[pair]["UQ"] = np.sum(bQ * sU, axis=1) * self.norm
 
         self._vis_components = vis
 
@@ -153,7 +183,7 @@ class Simulator:
             vis_arr = vis_arr.reshape(4, -1, self.wide_bin.size)
             return np.sum(vis_arr * self.wide_bin[None, None], axis=2)
 
-    def run(self, channelize="narrow", RM=100):
+    def run(self, channelize="narrow", RM=100, src_frac=None):
         """
         Run the simulation.
 
@@ -165,12 +195,16 @@ class Simulator:
             If None, do not channelize.
         RM : float
             Rotation measure in rad/m^2.
+        src_frac : float
+            Fraction of pixels in the source. If provided, the visibilities
+            are scaled by the inverse of this fraction to account for the
+            fact that the source is not the entire sky.
 
         """
         # first do computation at a reference frequency
         # where the polarization angle is zero (23 GHz XXX)
         self.compute_vis()
-        vis_arr = np.zeros(3, dtype=complex)
+        vis_arr = np.zeros((3, self.nfreq), dtype=complex)
         for i, pair in enumerate(["XX", "XY", "YY"]):
             for stokes in ["I", "Q", "U"]:
                 vis_arr[i] += self._vis_components[pair][stokes]
@@ -190,12 +224,13 @@ class Simulator:
                 sim_freq = self.freq
 
         # the frequency dependence is just a power law if no Faraday rotation
-        pl_factor = (sim_freq / self.ref_freq) ** (-2.5)
-        vis_arr = pl_factor[None, :] * vis_arr[:, None]
+        if self.nfreq == 1:
+            pl_factor = (sim_freq / self.ref_freq) ** (-2.5)
+            vis_arr = pl_factor[None, :] * vis_arr
 
         # for faraday rotation, we get UQ and QU terms
         chi = pol_angle(sim_freq, RM, ref_freq=self.ref_freq)
-        vis_arr_rot = np.zeros((3, sim_freq.size), dtype=complex)
+        vis_arr_rot = np.zeros_like(vis_arr)
         for i, pair in enumerate(["XX", "XY", "YY"]):
             vis_arr_rot[i] += self._vis_components[pair]["I"]
             vis_arr_rot[i] += (
@@ -206,7 +241,8 @@ class Simulator:
                 np.sin(2 * chi) * self._vis_components[pair]["QU"]
                 + np.cos(2 * chi) * self._vis_components[pair]["U"]
             )
-        vis_arr_rot = pl_factor[None, :] * vis_arr_rot
+        if self.nfreq == 1:
+            vis_arr_rot = pl_factor[None, :] * vis_arr_rot
 
         # _vis are raw visibilities, vis are channelized
         self._vis = np.array(
@@ -220,6 +256,9 @@ class Simulator:
                 vis_arr_rot[2],
             ]
         )
+        if src_frac:
+            self._vis /= src_frac
+            self._vis_rot /= src_frac
         if channelize:
             self.vis = self.channelize(self._vis, bins=channelize)
             self.vis_rot = self.channelize(self._vis_rot, bins=channelize)

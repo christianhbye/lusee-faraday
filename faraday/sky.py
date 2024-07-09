@@ -30,7 +30,7 @@ class Sky:
         Parameters
         ----------
         stokes : np.ndarray
-           Stokes parameters of the sky. Shape (3, npix).
+           Stokes parameters of the sky. Shape (3, npix) or (3, nfreq, npix).
         freq : np.ndarray
            Frequency in MHz.
         """
@@ -55,9 +55,9 @@ class Sky:
     @property
     def bright_pixels(self):
         """
-        Return the pixels that have non-zero Stokes I.
+        Return the pixels that have non-zero Stokes I at the first frequency.
         """
-        return self.stokes[0] != 0
+        return self.stokes[0, 0] != 0
 
     def del_dark_pixels(self):
         """
@@ -65,13 +65,15 @@ class Sky:
         pixels that were kept.
         """
         pixels = self.bright_pixels
-        self.stokes = self.stokes[:, pixels]
+        self.stokes = self.stokes[:, :, pixels]
         return pixels
 
     @classmethod
     def zeros(cls, nside=128, freq=30):
         npix = hp.nside2npix(nside)
-        return cls(stokes=np.zeros((3, npix)), freq=freq)
+        freq = np.atleast_1d(freq)
+        nf = len(freq)
+        return cls(stokes=np.zeros((3, nf, npix)), freq=freq)
 
     def add_point_source(self, extent=5):
         """
@@ -90,7 +92,7 @@ class Sky:
 
         lon, lat = self.sky_angle
         phi = np.deg2rad(lon)
-        mask = lat > 90 - extent
-        self.stokes[0, mask] += 1  # stokes I
-        self.stokes[1, mask] += -np.cos(2 * phi[mask])  # stokes Q
-        self.stokes[2, mask] += np.sin(2 * phi[mask])  # stokes U
+        src = lat > 90 - extent
+        self.stokes[0] += np.where(src, 1, 0)[None]  # stokes I
+        self.stokes[1] += np.where(src, -np.cos(2 * phi), 0)[None]  # stokes Q
+        self.stokes[2] += np.where(src, np.sin(2 * phi), 0)[None]  # stokes U
