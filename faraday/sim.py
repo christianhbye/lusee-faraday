@@ -86,7 +86,7 @@ def plot_stokes(
 class Simulator:
     ref_freq = 23e3  # 23 GHz, reference frequency for pol angle = 0
 
-    def __init__(self, beam, sky, center_freq=30, full_map=False):
+    def __init__(self, beam, sky, center_freq=30, del_pix=True):
         """
         Simulator class.
 
@@ -115,7 +115,7 @@ class Simulator:
             "zoom_response_4tap.txt"
         )
         self.center_freq = center_freq
-        spec = np.loadtxt(path)
+        spec = np.loadtxt(path)[500:1500]  # 1000 channels
         self.offset = spec[:, 0] / 1e3  # spacing in MHz
         spec = spec[:, 1:] / spec[:, 1:].sum(axis=0, keepdims=True)
         self.wide_bin = spec[:, 0]  # shape (2000,)
@@ -124,11 +124,13 @@ class Simulator:
         _beam = deepcopy(beam)
         _sky = deepcopy(sky)
 
+
         if not sky or not beam:
             return
 
+        print(f"{_beam.beam_X.shape=}")
         self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2, axis=(0, 2))
-        if not full_map:
+        if del_pix:
             _npix = _sky.npix
             pix = _sky.del_dark_pixels()
             self.source_frac = _sky.npix / _npix  # fraction of pixels in src
@@ -137,6 +139,7 @@ class Simulator:
         self.nfreq = sky.stokes.shape[1]
 
         self.beam = _beam
+        print(f"{_beam.beam_X.shape=}")
         self.sky = _sky
 
     def compute_vis(self):
