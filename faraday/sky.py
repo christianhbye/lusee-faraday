@@ -110,7 +110,10 @@ class Sky:
             Resolution of the map.
 
         """
-        wmap_path = "/home/christian/Documents/research/lusee/faraday/data/wmap_band_iqumap_r9_9yr_K_v5.fits"
+        wmap_path = (
+            "/home/christian/Documents/research/lusee/faraday/data/"
+            "wmap_band_iqumap_r9_9yr_K_v5.fits"
+        )
         with fits.open(wmap_path) as hdul:
             d = hdul["Stokes Maps"].data  # in mK XXX
             I_wmap = d["TEMPERATURE"] * 1e-3  # in K
@@ -137,7 +140,7 @@ class Sky:
         time : astropy.time.Time
             Time of observation.
         moon : bool
-            If True, the observer is on the moon. Otherwise, the observer is 
+            If True, the observer is on the moon. Otherwise, the observer is
             on Earth.
 
         """

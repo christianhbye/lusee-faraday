@@ -124,7 +124,6 @@ class Simulator:
         _beam = deepcopy(beam)
         _sky = deepcopy(sky)
 
-
         if not sky or not beam:
             return
 

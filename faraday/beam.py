@@ -2,7 +2,7 @@ from functools import partial
 import numpy as np
 import healpy as hp
 from astropy.io import fits
-from croissant.healpix import grid2healpix
+import croissant as cro
 
 # stokes I, Q, U polarization matrices
 PAULI_MATRICES = {
@@ -190,8 +190,12 @@ class LuseeBeam(Beam):
         lusee_X = rotate_Y2X(lusee_Y, phi_axis=-1)
 
         # convert to healpix
-        lusee_X = np.array([grid2healpix(lX, nside) for lX in lusee_X])
-        lusee_Y = np.array([grid2healpix(lY, nside) for lY in lusee_Y])
+        lusee_X = np.array(
+            [cro.healpix.grid2healpix(lX, nside) for lX in lusee_X]
+        )
+        lusee_Y = np.array(
+            [cro.healpix.grid2healpix(lY, nside) for lY in lusee_Y]
+        )
 
         # move frequency axis to 1st axis
         lusee_X = np.swapaxes(lusee_X, 0, 1)
