@@ -127,7 +127,7 @@ class Sky:
         stokes = np.expand_dims(stokes, axis=1)
         return cls(stokes=stokes, freq=23e3)
 
-    def gal_to_topo(self, lat, lon, time, moon=True):
+    def gal_to_topo(self, lat, lon, time, moon=True, pol=True):
         """
         Convert the sky to the topocentric frame on the moon.
 
@@ -142,6 +142,8 @@ class Sky:
         moon : bool
             If True, the observer is on the moon. Otherwise, the observer is
             on Earth.
+        pol : bool
+            If True, the conversion is done for polarized IQU maps.
 
         """
         # combine stokes and freq axes to one
@@ -153,8 +155,9 @@ class Sky:
         else:
             frame = "C"  # equatorial
         r_g2m = rotations.Rotator(coord=f"G{frame}")
-        stokes_mcmf = r_g2m.rotate_map_alms(stokes, lmax=50)
-        # mcmf to topo (XXX equatorial)
+        stokes_mcmf = r_g2m.rotate_map_alms(stokes, lmax=50, polarized=pol)
         r_m2t = rotations.Rotator(coord=f"{frame}T", loc=(lon, lat), time=time)
-        stokes_topo = r_m2t.rotate_map_alms(stokes_mcmf, lmax=50)
+        stokes_topo = r_m2t.rotate_map_alms(
+            stokes_mcmf, lmax=50, polarized=pol
+        )
         self.stokes = stokes_topo.reshape(self.stokes.shape)
