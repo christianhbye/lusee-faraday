@@ -127,7 +127,6 @@ class Simulator:
         if not sky or not beam:
             return
 
-        print(f"{_beam.beam_X.shape=}")
         self.norm = 2 / np.sum(np.abs(_beam.beam_X) ** 2, axis=(0, 2))
         if del_pix:
             _npix = _sky.npix
@@ -138,7 +137,6 @@ class Simulator:
         self.nfreq = sky.stokes.shape[1]
 
         self.beam = _beam
-        print(f"{_beam.beam_X.shape=}")
         self.sky = _sky
 
     def compute_vis(self):
