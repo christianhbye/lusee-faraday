@@ -40,6 +40,14 @@ class Sky:
         self.freq = freq
 
     @property
+    def coherency(self):
+        """
+        Return the coherency matrix of the sky.
+        """
+        I, Q, U = self.stokes
+        return 1 / 2 * np.array([[I + Q, U], [U, I - Q]])
+
+    @property
     def npix(self):
         return self.stokes.shape[-1]
 
@@ -149,15 +157,10 @@ class Sky:
         # combine stokes and freq axes to one
         npix = self.stokes.shape[-1]
         stokes = self.stokes.reshape(-1, npix)
-        # galactic to mcmf (equatorial)
         if moon:
-            frame = "M"  # mcmf
+            frame = "L"  # lunar topocentric frame
         else:
-            frame = "C"  # equatorial
-        r_g2m = rotations.Rotator(coord=f"G{frame}")
-        stokes_mcmf = r_g2m.rotate_map_alms(stokes, lmax=50, polarized=pol)
-        r_m2t = rotations.Rotator(coord=f"{frame}T", loc=(lon, lat), time=time)
-        stokes_topo = r_m2t.rotate_map_alms(
-            stokes_mcmf, lmax=50, polarized=pol
-        )
+            frame = "T"  # earth topocentric frame
+        r = rotations.Rotator(coord=f"G{frame}", loc=(lon, lat), time=time)
+        stokes_topo = r.rotate_map_alms(stokes, lmax=50, polarized=pol)
         self.stokes = stokes_topo.reshape(self.stokes.shape)
