@@ -1,7 +1,7 @@
 from astropy import units as u
 from astropy.coordinates import Galactic
 import croissant as cro
-from healpy import Rotator
+from healpy import mollview, Rotator
 from lunarsky import LunarTopo, MoonLocation, Time
 import numpy as np
 
@@ -31,12 +31,12 @@ class Simulator:
         self.wide_bin = spec[:, 0]
         self.spec = spec[:, 1:]
 
-        beam.beam_X = beam.beam_X[:, 0]  # killing the freq axis
-        beam.beam_Y = beam.beam_Y[:, 0]
+        beam.beam_X = np.squeeze(beam.beam_X)  # killing the freq axis
+        beam.beam_Y = np.squeeze(beam.beam_Y)
         self.beam = beam
         self.sky = sky
 
-        self.norm = 2 / np.sum(np.abs(beam.beam_XY) ** 2, axis=(0, 2))
+        self.norm = 2 / np.sum(np.abs(beam.beam_X) ** 2)
 
         self.nfreq = sky.stokes.shape[1]
 
@@ -46,19 +46,19 @@ class Simulator:
         """
         vis = {}
         vis["XX"] = np.einsum(
-            "ap, bp, abfp -> fp",
+            "ap, bp, abfp -> f",
             self.beam.beam_X,
             self.beam.beam_X.conj(),
             self.sky.coherency,
         )
         vis["YY"] = np.einsum(
-            "ap, bp, abfp -> fp",
+            "ap, bp, abfp -> f",
             self.beam.beam_Y,
             self.beam.beam_Y.conj(),
             self.sky.coherency,
         )
         vis["XY"] = np.einsum(
-            "ap, bp, abfp -> fp",
+            "ap, bp, abfp -> f",
             self.beam.beam_X,
             self.beam.beam_Y.conj(),
             self.sky.coherency,
@@ -68,19 +68,19 @@ class Simulator:
 
         return vis
 
-    def rotate_sky(self, from_frame, to_frame):
+    def rotate_sky(self, galactic_stokes, to_frame):
         """
-        Rotate the sky from one frame to another.
+        Rotate the sky from galactic to a topocentric frame.
 
         """
-        rm = cro.utils.get_rot_mat(from_frame, to_frame)
+        rm = cro.utils.get_rot_mat(Galactic(), to_frame)
         eul = cro.utils.rotmat_to_euler(rm, eulertype="ZYX")
         rot = Rotator(
             rot=eul, coord=None, inv=False, deg=False, eulertype="ZYX"
         )
-        rsky = np.empty_like(self.sky.stokes)
+        rsky = np.empty_like(galactic_stokes)
         for i in range(self.nfreq):
-            rsky[:, i] = rot.rotate_map_alms(self.sky.stokes[:, i], lmax=50)
+            rsky[:, i] = rot.rotate_map_alms(galactic_stokes[:, i], lmax=50)
         self.sky.stokes = rsky
 
     def run(
@@ -103,16 +103,17 @@ class Simulator:
         all_vis["XX"] = np.zeros((ntimes, self.nfreq))
         all_vis["YY"] = np.zeros((ntimes, self.nfreq))
         all_vis["XY"] = np.zeros((ntimes, self.nfreq), dtype=complex)
-        # rotate sky and RM from galactic to topocentric
+        galactic_stokes = self.sky.stokes  # sky in galactic frame
         loc = MoonLocation(lon, lat)
-        time = Time(t0)
-        topo_frame = LunarTopo(location=loc, obstime=time)
-        self.rotate_sky(Galactic(), topo_frame)
+        time0 = Time(t0, location=loc)
         for i in range(ntimes):
-            if i > 0:  # rotate sky and RM with time
-                time = time + dt * u.hour
-                topo_frame = LunarTopo(location=loc, obstime=time)
-                self.rotate_sky(Galactic(), topo_frame)
+            time = time0 + i * dt * u.hour
+            new_frame = LunarTopo(location=loc, obstime=time)
+            ts = new_frame.obstime.sidereal_time("apparent")
+            print(f"Running time {i+1}/{ntimes}, {ts}")
+            self.rotate_sky(galactic_stokes, new_frame)
+            if i % 10 == 0:
+                mollview(self.sky.stokes[0, 0], title=f"Time {i}")
             vis = self.convolve()
             for k, v in vis.items():
                 all_vis[k][i] = v
@@ -133,4 +134,14 @@ class Simulator:
         else:
             raise ValueError("bins must be 'narrow' or 'wide'.")
             
+    def vis2stokes(self):
+        """
+        Convert visibility to stokes parameters.
 
+        """
+        vis = self.vis
+        stokes = {}
+        stokes["I"] = 1/2 * (vis["XX"] + vis["YY"])
+        stokes["Q"] = 1/2 * (vis["XX"] - vis["YY"])
+        stokes["U"] = vis["XY"].real
+        self.stokes = stokes
